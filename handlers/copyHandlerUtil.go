@@ -21,18 +21,22 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-storage-azcopy/common"
-	"github.com/Azure/azure-storage-blob-go/2016-05-31/azblob"
-	tm "github.com/buger/goterm"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Azure/azure-pipeline-go/pipeline"
+	"github.com/Azure/azure-storage-azcopy/common"
+	"github.com/Azure/azure-storage-blob-go/2016-05-31/azblob"
+	"github.com/Azure/azure-storage-file-go/2017-04-17/azfile"
+	tm "github.com/buger/goterm"
 )
 
 const (
@@ -141,6 +145,69 @@ func (util copyHandlerUtil) getContainerURLFromString(url url.URL) url.URL {
 	containerName := strings.SplitAfterN(url.Path[1:], "/", 2)[0]
 	url.Path = "/" + containerName
 	return url
+}
+
+func (util copyHandlerUtil) endWithSlashOrBackSlash(path string) bool {
+	return strings.HasSuffix(path, "/") || strings.HasSuffix(path, "\\")
+}
+
+// getPossibleFileNameFromURL return the possible file name get from URL.
+func (util copyHandlerUtil) getPossibleFileNameFromURL(path string) string {
+	//TODO: jiac what about empty file name?
+	if util.endWithSlashOrBackSlash(path) {
+		return ""
+	}
+
+	return path[strings.LastIndex(path, "/")+1:]
+}
+
+// getDeepestDirOrFileURLFromString returns the deepest DirectoryURL specified by the provided url.
+// When provided url is endwith *, get parent directory of file whose name is with *.
+// When provided url without *, the url could be a file or a directory, in this case make request to get the deepest dir.
+func (util copyHandlerUtil) getDeepestDirOrFileURLFromString(ctx context.Context, givenURL url.URL, p pipeline.Pipeline) (*azfile.DirectoryURL, *azfile.FileURL, *azfile.FileGetPropertiesResponse, bool) {
+	url := givenURL
+	path := url.Path
+
+	buffer := bytes.Buffer{}
+	defer buffer.Reset() // Free the buffer.
+
+	if strings.HasSuffix(path, "*") {
+		lastSlashIndex := strings.LastIndex(path, "/") //TODO: ensure the case of \
+		url.Path = url.Path[:lastSlashIndex]
+	} else {
+		if !strings.HasSuffix(path, "/") {
+			// Could be a file or a directory, try to see if file exists
+			fileURL := azfile.NewFileURL(url, p)
+
+			if gResp, err := fileURL.GetProperties(ctx); err == nil {
+				return nil, &fileURL, gResp, true
+			} else {
+				fmt.Fprintf(&buffer, "Fail to parse %v as a file for error %v, given URL: %s\n", url, err, givenURL.String())
+			}
+		}
+	}
+	dirURL := azfile.NewDirectoryURL(url, p)
+	if _, err := dirURL.GetProperties(ctx); err == nil {
+		return &dirURL, nil, nil, true
+	} else {
+		fmt.Fprintf(&buffer, "Fail to parse %v as a directory for error %v, given URL: %s\n", url, err, givenURL.String())
+	}
+
+	// Log the error if the given URL is neither an existing Azure file directory nor an existing Azure file.
+	fmt.Print(buffer.String())
+
+	return nil, nil, nil, false
+}
+
+// isDirectoryStartExpression verifies if an url is like directory/* or share/* which equals to a directory or share.
+// If it could be transferred to a directory, return the URL which directly express directory.
+func (util copyHandlerUtil) isDirectoryStarExpression(url url.URL) (isDirectoryStartExpression bool, equivalentURL url.URL) {
+	if strings.HasSuffix(url.Path, "/*") {
+		url.Path = url.Path[:len(url.Path)-1]
+		isDirectoryStartExpression = true
+	}
+	equivalentURL = url
+	return
 }
 
 func (util copyHandlerUtil) generateBlobUrl(containerUrl url.URL, blobName string) string {
@@ -367,22 +434,43 @@ func (enumerator *uploadTaskEnumerator) enumerate(listOfFilesAndDirectories []st
 	return enumerator.dispatchFinalPart()
 }
 
-type downloadTaskEnumerator struct {
+type downloadBlobTaskEnumerator struct {
 	jobPartOrderToFill *common.CopyJobPartOrderRequest
 	transfers          []common.CopyTransfer
 	partNumber         int
 }
 
+// Interface implementations.
+func (enumerator *downloadBlobTaskEnumerator) JobPartOrderToFill() *common.CopyJobPartOrderRequest {
+	return enumerator.jobPartOrderToFill
+}
+
+func (enumerator *downloadBlobTaskEnumerator) Transfers() []common.CopyTransfer {
+	return enumerator.transfers
+}
+
+func (enumerator *downloadBlobTaskEnumerator) SetTransfers(transfers []common.CopyTransfer) {
+	enumerator.transfers = transfers
+}
+
+func (enumerator *downloadBlobTaskEnumerator) PartNumber() int {
+	return enumerator.partNumber
+}
+
+func (enumerator *downloadBlobTaskEnumerator) SetPartNumber(partNumber int) {
+	enumerator.partNumber = partNumber
+}
+
 // return a download task enumerator with a given job part order template
-// downloadTaskEnumerator can walk through the list of blobs requested and dispatch the job part orders using the template
-func newDownloadTaskEnumerator(jobPartOrderToFill *common.CopyJobPartOrderRequest) *downloadTaskEnumerator {
-	enumerator := downloadTaskEnumerator{}
+// downloadBlobTaskEnumerator can walk through the list of blobs requested and dispatch the job part orders using the template
+func newDownloadBlobTaskEnumerator(jobPartOrderToFill *common.CopyJobPartOrderRequest) *downloadBlobTaskEnumerator {
+	enumerator := downloadBlobTaskEnumerator{}
 	enumerator.jobPartOrderToFill = jobPartOrderToFill
 	return &enumerator
 }
 
 // this function accepts a url (with or without *) to blobs for download and processes them
-func (enumerator *downloadTaskEnumerator) enumerate(sourceUrlString string, isRecursiveOn bool, destinationPath string) error {
+func (enumerator *downloadBlobTaskEnumerator) enumerate(sourceUrlString string, isRecursiveOn bool, destinationPath string) error {
 	util := copyHandlerUtil{}
 	p := azblob.NewPipeline(azblob.NewAnonymousCredential(), azblob.PipelineOptions{})
 
@@ -496,7 +584,7 @@ func (enumerator *downloadTaskEnumerator) enumerate(sourceUrlString string, isRe
 			searchPrefix := util.getBlobNameFromURL(sourceUrl.Path)
 
 			// if the user did not specify / at the end of the virtual directory, add it before doing the prefix search
-			if strings.LastIndex(searchPrefix, "/") != len(searchPrefix) - 1 {
+			if strings.LastIndex(searchPrefix, "/") != len(searchPrefix)-1 {
 				searchPrefix += "/"
 			}
 
@@ -542,28 +630,11 @@ func (enumerator *downloadTaskEnumerator) enumerate(sourceUrlString string, isRe
 }
 
 // accept a new transfer, simply add to the list of transfers and wait for the dispatch call to send the order
-func (enumerator *downloadTaskEnumerator) addTransfer(transfer common.CopyTransfer) {
-	enumerator.transfers = append(enumerator.transfers, transfer)
+func (enumerator *downloadBlobTaskEnumerator) addTransfer(transfer common.CopyTransfer) {
+	addTransfer(enumerator, transfer)
 }
 
 // send the current list of transfer to the STE
-func (enumerator *downloadTaskEnumerator) dispatchPart(isFinalPart bool) error {
-	// if the job is empty, throw an error
-	if !isFinalPart && len(enumerator.transfers) == 0 {
-		return errors.New("cannot initiate empty job, please make sure source is not empty")
-	}
-
-	// add the transfers and part number to template
-	enumerator.jobPartOrderToFill.Transfers = enumerator.transfers
-	enumerator.jobPartOrderToFill.PartNum = common.PartNumber(enumerator.partNumber)
-
-	jobStarted, errorMsg := copyHandlerUtil{}.sendJobPartOrderToSTE(enumerator.jobPartOrderToFill, common.PartNumber(enumerator.partNumber), isFinalPart)
-	if !jobStarted {
-		return errors.New(fmt.Sprintf("copy job part order with JobId %s and part number %d failed because %s", enumerator.jobPartOrderToFill.ID, enumerator.jobPartOrderToFill.PartNum, errorMsg))
-	}
-
-	// empty the transfers and increment part number count
-	enumerator.transfers = []common.CopyTransfer{}
-	enumerator.partNumber += 1
-	return nil
+func (enumerator *downloadBlobTaskEnumerator) dispatchPart(isFinalPart bool) error {
+	return dispatchPart(enumerator, isFinalPart)
 }

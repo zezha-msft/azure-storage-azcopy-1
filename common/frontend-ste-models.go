@@ -24,11 +24,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/Azure/azure-pipeline-go/pipeline"
 	"io/ioutil"
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/Azure/azure-pipeline-go/pipeline"
 )
 
 type JobID UUID
@@ -42,6 +43,11 @@ const DefaultAppendBlobSize = 4 * 1024 * 1024
 const DefaultPageBlobSize = 4 * 1024 * 1024
 
 const PageBlobPageBytes = 512
+
+const (
+	LocationTypeFile = "file"
+	LocationTypeBlob = "blob"
+)
 
 func (j JobID) String() string {
 	return UUID(j).String()
@@ -240,9 +246,11 @@ type CopyCmdArgsAndFlags struct {
 type LocationType uint8
 
 const (
-	Local   LocationType = 0
-	Blob    LocationType = 1
-	Unknown LocationType = 2
+	// Unknown is location type's default value
+	Unknown LocationType = 0
+	Local   LocationType = 1
+	Blob    LocationType = 2
+	File    LocationType = 3
 )
 
 // This struct represent a single transfer entry with source and destination details

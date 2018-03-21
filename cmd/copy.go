@@ -22,6 +22,7 @@ package cmd
 
 import (
 	"errors"
+
 	"github.com/Azure/azure-storage-azcopy/common"
 	"github.com/Azure/azure-storage-azcopy/handlers"
 	"github.com/spf13/cobra"
@@ -30,6 +31,12 @@ import (
 // TODO check file size, max is 4.75TB
 func init() {
 	commandLineInput := common.CopyCmdArgsAndFlags{}
+
+	supportMatric := map[common.LocationType][]common.LocationType{
+		common.Local: []common.LocationType{common.Blob, common.File},
+		common.Blob:  []common.LocationType{common.Local},
+		common.File:  []common.LocationType{common.Local},
+	}
 
 	// cpCmd represents the cp command
 	cpCmd := &cobra.Command{
@@ -62,20 +69,44 @@ Usage:
 				commandLineInput.BlobUrlForRedirection = args[0]
 
 			} else if len(args) == 2 { // normal copy
-				sourceType := validator{}.determineLocationType(args[0])
+				// Parse source type.
+				sourceType := common.Unknown
+				if commandLineInput.SourceType == common.Unknown {
+					sourceType = validator{}.determineLocationType(args[0])
+				} else {
+					// TODO: use enum from Jeff, user endpoint stype
+				}
 				if sourceType == common.Unknown {
 					return errors.New("the provided source is invalid")
 				}
 
-				destinationType := validator{}.determineLocationType(args[1])
+				// Parse dest type.
+				destinationType := common.Unknown
+				if commandLineInput.DestinationType == common.Unknown {
+					destinationType = validator{}.determineLocationType(args[1])
+				} else {
+					// TODO: use enum from Jeff, user endpoint stype
+				}
 				if destinationType == common.Unknown {
 					return errors.New("the provided destination is invalid")
 				}
 
-				if sourceType == common.Blob && destinationType == common.Blob || sourceType == common.Local && destinationType == common.Local {
-					return errors.New("the provided source/destination pair is invalid")
+				// Check source&dest support matrix.
+				if supportDestTypes, ok := supportMatric[sourceType]; ok {
+					support := false
+					for _, supportDestType := range supportDestTypes {
+						if supportDestType == destinationType {
+							support = true
+						}
+					}
+					if !support {
+						return errors.New("the provided source/destination pair is invalid")
+					}
+				} else {
+					return errors.New("the provided source is invalid")
 				}
 
+				// Assign the source/destination, and sourceType/DestinationType
 				commandLineInput.Source = args[0]
 				commandLineInput.Destination = args[1]
 				commandLineInput.SourceType = sourceType
@@ -99,6 +130,11 @@ Usage:
 	rootCmd.AddCommand(cpCmd)
 
 	// define the flags relevant to the cp command
+
+	// source and dest
+	// TODO: jiac, add support after refactoring of Jeff done
+	//cpCmd.PersistentFlags().StringVar(&commandLineInput.SourceType, "source-type", common.Unknown, "Source location type.")
+	//cpCmd.PersistentFlags().StringVar(&commandLineInput.DestinationType, "dest-type", common.Unknown, "Destination location type.")
 
 	// filters
 	cpCmd.PersistentFlags().StringVar(&commandLineInput.Include, "include", "", "Filter: Include these files when copying. Support use of *.")

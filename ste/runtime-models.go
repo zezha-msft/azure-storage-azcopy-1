@@ -2,10 +2,11 @@ package ste
 
 import (
 	"context"
-	"github.com/Azure/azure-storage-azcopy/handlers"
 	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/Azure/azure-storage-azcopy/handlers"
 	"github.com/Azure/azure-storage-blob-go/2016-05-31/azblob"
 )
 
@@ -52,6 +53,7 @@ type JobPartPlanInfo struct {
 
 	metaData azblob.Metadata
 
+	//todo: jiac azfile.Metadata? interface?
 
 	// numberOfTransfersDone_doNotUse represents the number of transfer of JobPartOrder
 	// which are either completed or failed

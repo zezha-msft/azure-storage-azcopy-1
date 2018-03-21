@@ -1,13 +1,15 @@
 package ste
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"github.com/Azure/azure-storage-azcopy/common"
-	"github.com/Azure/azure-storage-blob-go/2016-05-31/azblob"
 	"net/http"
 	"time"
-	"bytes"
+
+	"github.com/Azure/azure-storage-azcopy/common"
+	"github.com/Azure/azure-storage-blob-go/2016-05-31/azblob"
+	"github.com/Azure/azure-storage-file-go/2017-04-17/azfile"
 )
 
 // TransferMsg represents the transfer message for scheduling the transfers
@@ -21,7 +23,7 @@ type TransferMsg struct {
 	jobInfo *JobInfo
 
 	// TransferContext is the context of transfer to be scheduled
-	TransferContext    context.Context
+	TransferContext context.Context
 
 	// TransferCancelFunc is the cancel func that is used to cancel the Transfer Context
 	TransferCancelFunc context.CancelFunc
@@ -36,8 +38,8 @@ type TransferMsg struct {
 	Destination     string
 	// NumChunks is the number of chunks in which transfer will be split into while uploading the transfer.
 	// NumChunks is not used in case of AppendBlob transfer.
-	NumChunks       uint16
-	BlockSize       uint32
+	NumChunks uint16
+	BlockSize uint32
 }
 
 // Log method logs the given log message to JobLog file.
@@ -61,7 +63,7 @@ func (t *TransferMsg) ChunksDone() uint32 {
 
 // GetChunksDone returns the number of chunks done of a transfer.
 // this api is exposed for developers to debug the code.
-func (t *TransferMsg) GetChunksDone() uint32{
+func (t *TransferMsg) GetChunksDone() uint32 {
 	return t.jobInfo.JobPartPlanInfo(t.partNumber).TransfersInfo[t.transferIndex].getNumberOfChunksDone()
 }
 
@@ -110,7 +112,37 @@ func (t *TransferMsg) blobHttpHeaderAndMetadata(sourceBytes []byte) (httpHeaderP
 	httpHeaderProperties = azblob.BlobHTTPHeaders{ContentType: contentType, ContentEncoding: contentEncoding}
 
 	metadata = jPartPlanInfo.metaData
-	
+
+	return
+}
+
+// fileHttpHeaderAndMetadata returns the azfile.BlobHTTPHeaders with BlobData attributes of JobPart Order
+// TODO: jiac, unify the BlobData after Jeff's code get in
+func (t *TransferMsg) fileHttpHeaderAndMetadata(sourceBytes []byte) (httpHeaderProperties azfile.FileHTTPHeaders, metadata azfile.Metadata) {
+
+	// jPartPlanHeader is the JobPartPlan header for memory mapped JobPartOrder File
+
+	jPartPlanInfo := t.jobInfo.JobPartPlanInfo(t.partNumber)
+	jPartPlanHeader := jPartPlanInfo.getJobPartPlanPointer()
+	contentType := ""
+	contentEncoding := ""
+	// If NoGuessMimeType is set to false, then detecting the content type
+	if !jPartPlanHeader.BlobData.NoGuessMimeType {
+		contentType = http.DetectContentType(sourceBytes)
+	} else {
+		// If the NoGuessMimeType is set to false, then using the user given content-type
+		if jPartPlanHeader.BlobData.ContentTypeLength > 0 {
+			contentType = string(jPartPlanHeader.BlobData.ContentType[:jPartPlanHeader.BlobData.ContentTypeLength])
+		}
+	}
+	if jPartPlanHeader.BlobData.ContentEncodingLength > 0 {
+		contentEncoding = string(jPartPlanHeader.BlobData.ContentEncoding[:jPartPlanHeader.BlobData.ContentEncodingLength])
+	}
+	httpHeaderProperties = azfile.FileHTTPHeaders{ContentType: contentType, ContentEncoding: contentEncoding}
+
+	// TODO: Metadata type assertions
+	metadata = azfile.Metadata(jPartPlanInfo.metaData)
+
 	return
 }
 

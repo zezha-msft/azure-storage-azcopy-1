@@ -22,11 +22,12 @@ package ste
 
 import (
 	"fmt"
-	"github.com/Azure/azure-storage-azcopy/common"
 	"os"
-	"time"
-	"github.com/Azure/azure-storage-azcopy/handlers"
 	"strings"
+	"time"
+
+	"github.com/Azure/azure-storage-azcopy/common"
+	"github.com/Azure/azure-storage-azcopy/handlers"
 )
 
 // TODO move execution engine as internal package
@@ -101,8 +102,12 @@ func (executionEngine *executionEngine) engineWorker(workerId int, executionEngi
 // the xfer factory is generated based on the type of source and destination
 func (*executionEngine) computeTransferFactory(sourceLocationType, destinationLocationType common.LocationType, blobType common.BlobType) xferFactory {
 	switch {
+	case sourceLocationType == common.File && destinationLocationType == common.Local:
+		return newFileToLocal
 	case sourceLocationType == common.Blob && destinationLocationType == common.Local: // download from Azure to local
 		return newBlobToLocal
+	case sourceLocationType == common.Local && destinationLocationType == common.File:
+		return newLocalToFile
 	case sourceLocationType == common.Local && destinationLocationType == common.Blob: // upload from local to Azure
 		switch blobType {
 		case common.BlockBlob:
@@ -134,7 +139,7 @@ func (executionEngineHelper) openFile(filePath string, flags int) *os.File {
 // maps a *os.File into memory and return a byte slice (mmap.MMap)
 func (executionEngineHelper) mapFile(file *os.File) handlers.MMap {
 	fileInfo, err := file.Stat()
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 	memoryMappedFile, err := handlers.Map(file, true, 0, int(fileInfo.Size()))
@@ -145,7 +150,7 @@ func (executionEngineHelper) mapFile(file *os.File) handlers.MMap {
 }
 
 // create and memory map a file, given its path and length
-func (executionEngineHelper) createAndMemoryMapFile(destinationPath string, fileSize int64) (handlers.MMap,*os.File) {
+func (executionEngineHelper) createAndMemoryMapFile(destinationPath string, fileSize int64) (handlers.MMap, *os.File) {
 	executionEngineHelper{}.createParentDirectoryIfNotExist(destinationPath)
 	f := executionEngineHelper{}.openFile(destinationPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
 	if truncateError := f.Truncate(fileSize); truncateError != nil {
@@ -156,7 +161,7 @@ func (executionEngineHelper) createAndMemoryMapFile(destinationPath string, file
 }
 
 // in some cases (download), the file's parent directory must be created before the file can be created
-func (executionEngineHelper) createParentDirectoryIfNotExist (destinationPath string) {
+func (executionEngineHelper) createParentDirectoryIfNotExist(destinationPath string) {
 	// check if parent directory exists
 	parentDirectory := destinationPath[:strings.LastIndex(destinationPath, string(os.PathSeparator))]
 	_, err := os.Stat(parentDirectory)

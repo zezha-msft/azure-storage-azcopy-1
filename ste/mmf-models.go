@@ -1,8 +1,9 @@
 package ste
 
 import (
-	"github.com/Azure/azure-storage-azcopy/common"
 	"sync/atomic"
+
+	"github.com/Azure/azure-storage-azcopy/common"
 )
 
 // dataSchemaVersion defines the data schema version of JobPart order files supported by

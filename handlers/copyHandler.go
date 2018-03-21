@@ -22,6 +22,7 @@ package handlers
 
 import (
 	"fmt"
+
 	"github.com/Azure/azure-storage-azcopy/common"
 
 	"net/url"
@@ -42,22 +43,12 @@ func HandleCopyCommand(commandLineInput common.CopyCmdArgsAndFlags) {
 	jobPartOrder.ID = jobId
 	jobStarted := true
 
-	// not having a valid blob type is a fatal error
-	if jobPartOrder.OptionalAttributes.BlobType == common.InvalidBlob {
-		fmt.Println("Invalid blob type passed. Please enter the valid blob type - BlockBlob, AppendBlob, PageBlob")
-		return
-	}
-
-	// depending on the source and destination type, we process the cp command differently
-	if commandLineInput.SourceType == common.Local && commandLineInput.DestinationType == common.Blob {
-		jobStarted = handleUploadFromLocalToBlobStorage(&commandLineInput, &jobPartOrder)
-	} else if commandLineInput.SourceType == common.Blob && commandLineInput.DestinationType == common.Local {
-		jobStarted = handleDownloadFromBlobStorageToLocal(&commandLineInput, &jobPartOrder)
-	}
+	// dispatch transfer
+	jobStarted = dispatchTransfer(&commandLineInput, &jobPartOrder)
 
 	// unexpected errors can happen while communicating with the transfer engine
 	if !jobStarted {
-		fmt.Println("Job with id", jobId, "was not abe to start. Please try again")
+		fmt.Println("Job with id", jobId, "was not able to start. Please try again")
 		return
 	}
 
@@ -96,15 +87,61 @@ func HandleCopyCommand(commandLineInput common.CopyCmdArgsAndFlags) {
 	return
 }
 
-func handleUploadFromLocalToBlobStorage(commandLineInput *common.CopyCmdArgsAndFlags,
+func dispatchTransfer(commandLineInput *common.CopyCmdArgsAndFlags,
+	jobPartOrder *common.CopyJobPartOrderRequest) bool {
+	switch {
+	case commandLineInput.SourceType == common.Blob || commandLineInput.DestinationType == common.Blob:
+		return handleBlobTransfer(commandLineInput, jobPartOrder)
+	case commandLineInput.SourceType == common.File || commandLineInput.DestinationType == common.File:
+		return handleFileTransfer(commandLineInput, jobPartOrder)
+	default:
+		fmt.Printf("Cannot launch tranfer from source type %v to destination type %v.", commandLineInput.SourceType, commandLineInput.DestinationType)
+		return false
+	}
+}
+
+func handleBlobTransfer(commandLineInput *common.CopyCmdArgsAndFlags,
+	jobPartOrder *common.CopyJobPartOrderRequest) bool {
+
+	jobStarted := false
+	// not having a valid blob type is a fatal error
+	if jobPartOrder.OptionalAttributes.BlobType == common.InvalidBlob {
+		fmt.Println("Invalid blob type passed. Please enter the valid blob type - BlockBlob, AppendBlob, PageBlob")
+		return jobStarted
+	}
+
+	// depending on the source and destination type, we process the cp command differently
+	if commandLineInput.SourceType == common.Local && commandLineInput.DestinationType == common.Blob {
+		jobStarted = handleUploadFromLocalToAzureStorage(commandLineInput, common.Blob, jobPartOrder)
+	} else if commandLineInput.SourceType == common.Blob && commandLineInput.DestinationType == common.Local {
+		jobStarted = handleDownloadFromAzureStorageToLocal(commandLineInput, common.Blob, jobPartOrder)
+	}
+	return jobStarted
+}
+
+func handleFileTransfer(commandLineInput *common.CopyCmdArgsAndFlags,
+	jobPartOrder *common.CopyJobPartOrderRequest) bool {
+
+	jobStarted := false
+	// depending on the source and destination type, we process the cp command differently
+	if commandLineInput.SourceType == common.Local && commandLineInput.DestinationType == common.File {
+		jobStarted = handleUploadFromLocalToAzureStorage(commandLineInput, common.File, jobPartOrder)
+	} else if commandLineInput.SourceType == common.File && commandLineInput.DestinationType == common.Local {
+		jobStarted = handleDownloadFromAzureStorageToLocal(commandLineInput, common.File, jobPartOrder)
+	}
+	return jobStarted
+}
+
+func handleUploadFromLocalToAzureStorage(commandLineInput *common.CopyCmdArgsAndFlags,
+	destType common.LocationType,
 	jobPartOrderToFill *common.CopyJobPartOrderRequest) bool {
 
 	// set the source and destination type
 	jobPartOrderToFill.SourceType = common.Local
-	jobPartOrderToFill.DestinationType = common.Blob
+	jobPartOrderToFill.DestinationType = destType
 
 	// attempt to parse the destination url
-	destinationUrl, err := url.Parse(commandLineInput.Destination)
+	destinationURL, err := url.Parse(commandLineInput.Destination)
 	if err != nil {
 		// the destination should have already been validated, it would be surprising if it cannot be parsed at this point
 		panic(err)
@@ -118,30 +155,42 @@ func handleUploadFromLocalToBlobStorage(commandLineInput *common.CopyCmdArgsAndF
 	}
 
 	enumerator := newUploadTaskEnumerator(jobPartOrderToFill)
-	err = enumerator.enumerate(matches, commandLineInput.Recursive, destinationUrl)
+	err = enumerator.enumerate(matches, commandLineInput.Recursive, destinationURL)
 
 	if err != nil {
 		fmt.Printf("Cannot start job due to error: %s.\n", err)
 		return false
-	} else {
-		return true
 	}
+
+	return true
 }
 
-func handleDownloadFromBlobStorageToLocal(commandLineInput *common.CopyCmdArgsAndFlags,
+func handleDownloadFromAzureStorageToLocal(commandLineInput *common.CopyCmdArgsAndFlags,
+	srcType common.LocationType,
 	jobPartOrderToFill *common.CopyJobPartOrderRequest) bool {
 
 	// set the source and destination type
-	jobPartOrderToFill.SourceType = common.Blob
+	jobPartOrderToFill.SourceType = srcType
 	jobPartOrderToFill.DestinationType = common.Local
 
-	enumerator := newDownloadTaskEnumerator(jobPartOrderToFill)
+	var enumerator downloadEnumerator
+
+	switch srcType {
+	case common.Blob:
+		enumerator = newDownloadBlobTaskEnumerator(jobPartOrderToFill)
+	case common.File:
+		enumerator = newDownloadFileTaskEnumerator(jobPartOrderToFill)
+	default:
+		fmt.Printf("Cannot create properly enumerator for source location type: %v", srcType)
+		return false
+	}
+
 	err := enumerator.enumerate(commandLineInput.Source, commandLineInput.Recursive, commandLineInput.Destination)
 
 	if err != nil {
 		fmt.Printf("Cannot start job due to error: %s.\n", err)
 		return false
-	} else {
-		return true
 	}
+
+	return true
 }

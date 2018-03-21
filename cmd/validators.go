@@ -21,9 +21,12 @@
 package cmd
 
 import (
-	"github.com/Azure/azure-storage-azcopy/common"
+	"net"
 	"net/url"
 	"os"
+	"strings"
+
+	"github.com/Azure/azure-storage-azcopy/common"
 )
 
 type validator struct{}
@@ -31,8 +34,8 @@ type validator struct{}
 func (validator validator) determineLocationType(stringToParse string) common.LocationType {
 	if validator.isLocalPath(stringToParse) {
 		return common.Local
-	} else if validator.isUrl(stringToParse) {
-		return common.Blob
+	} else if isAzureLocation, locationType := validator.isAzureLocation(stringToParse); isAzureLocation {
+		return locationType
 	} else {
 		return common.Unknown
 	}
@@ -52,7 +55,7 @@ func (validator validator) isLocalPath(path string) bool {
 }
 
 // verify if givenUrl is a valid url
-func (validator) isUrl(givenUrl string) bool {
+func (validator validator) isUrl(givenUrl string) bool {
 	u, err := url.Parse(givenUrl)
 	// attempting to parse the url validates whether a given string is a valid url
 	if err != nil {
@@ -64,4 +67,39 @@ func (validator) isUrl(givenUrl string) bool {
 		return false
 	}
 	return true
+}
+
+// isAzureLocation checkes if a given url string is an AzureLocation and the location type.
+func (validator validator) isAzureLocation(givenURL string) (bool, common.LocationType) {
+	if !validator.isUrl(givenURL) {
+		return false, common.Unknown
+	}
+
+	u, _ := url.Parse(givenURL)            // No error should get here after isUrl call.
+	if validator.isEndPointStyle(u.Host) { // TODO: jiac Note endpoint style open new stuffs, need go through existing logics.
+		return true, common.Unknown
+	}
+
+	// It's a possble Azure URL, and it's not a endpoint style URL.
+	tokens := strings.Split(u.Host, ".")
+	if len(tokens) == 5 {
+		location := tokens[1]
+
+		// TODO: jiac here logic can be changed with Jeffrey's enum tools
+		switch {
+		case strings.EqualFold(location, common.LocationTypeFile):
+			return true, common.File
+		case strings.EqualFold(location, common.LocationTypeBlob):
+			return true, common.Blob
+		default:
+			return false, common.Unknown
+		}
+	}
+
+	return false, common.Unknown
+}
+
+// isEndPointStyle check URL's host segment, if it's IP style, then it's endpoint style.
+func (validator validator) isEndPointStyle(host string) bool {
+	return net.ParseIP(host) != nil
 }
