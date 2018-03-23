@@ -62,12 +62,12 @@ Usage:
 `,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 { // redirection
-				sourceType := validator{}.determineLocationType(args[0])
-				if sourceType != common.Blob {
-					return errors.New("the provided blob URL for redirection is not valid")
+				sourceOrDestType := validator{}.determineLocationType(args[0]) // TODO: user endpoint style? and if location type read from command line? it actually could be a source or dest
+				if sourceOrDestType != common.Blob && sourceOrDestType != common.File {
+					return errors.New("the provided URL for redirection is not valid, only support Blob or file url")
 				}
-				commandLineInput.BlobUrlForRedirection = args[0]
-
+				commandLineInput.BlobOrFileURIForRedirection = args[0]
+				commandLineInput.SourceOrDestType = sourceOrDestType
 			} else if len(args) == 2 { // normal copy
 				// Parse source type.
 				sourceType := common.Unknown
@@ -105,6 +105,9 @@ Usage:
 				} else {
 					return errors.New("the provided source is invalid")
 				}
+
+				// todo: comment out for debugging
+				// fmt.Println("args0:[ " + args[0] + "] args1:[ " + args[1] + "]")
 
 				// Assign the source/destination, and sourceType/DestinationType
 				commandLineInput.Source = args[0]

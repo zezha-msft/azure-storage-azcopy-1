@@ -37,7 +37,7 @@ func dispatchPart(enumerator downloadEnumerator, isFinalPart bool) error {
 
 	jobStarted, errorMsg := copyHandlerUtil{}.sendJobPartOrderToSTE(enumerator.JobPartOrderToFill(), common.PartNumber(enumerator.PartNumber()), isFinalPart)
 	if !jobStarted {
-		return fmt.Errorf("copy job part order with JobId %s and part number %d failed because %s", enumerator.JobPartOrderToFill().ID, enumerator.JobPartOrderToFill().PartNum, errorMsg)
+		return fmt.Errorf("dispatch part copy job part order with JobId %s and part number %d failed because %s", enumerator.JobPartOrderToFill().ID, enumerator.JobPartOrderToFill().PartNum, errorMsg)
 	}
 
 	// empty the transfers and increment part number count

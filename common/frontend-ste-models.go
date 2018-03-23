@@ -213,13 +213,15 @@ func (logLevel LogLevel) String() string {
 // represents the raw copy command input from the user
 type CopyCmdArgsAndFlags struct {
 	// from arguments
-	Source                string
-	Destination           string
-	BlobUrlForRedirection string
+	Source                      string
+	Destination                 string
+	BlobOrFileURIForRedirection string
 
 	// inferred from arguments
 	SourceType      LocationType
 	DestinationType LocationType
+
+	SourceOrDestType LocationType // just for piping scenario
 
 	// filters from flags
 	Include        string

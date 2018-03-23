@@ -113,7 +113,7 @@ func (util copyHandlerUtil) isPathDirectory(pathString string) bool {
 	// check if path exists
 	destinationInfo, err := os.Stat(pathString)
 
-	if err == nil && destinationInfo.IsDir() {
+	if err == nil && destinationInfo.Mode().IsDir() {
 		return true
 	}
 
@@ -316,7 +316,7 @@ func (enumerator *uploadTaskEnumerator) addTransfer(transfer common.CopyTransfer
 		enumerator.jobPartOrderToFill.Transfers = enumerator.transfers // use the template, replace the list of transfers with current list
 		jobStarted, errorMsg := copyHandlerUtil{}.sendJobPartOrderToSTE(enumerator.jobPartOrderToFill, common.PartNumber(enumerator.partNumber), false)
 		if !jobStarted {
-			return errors.New(fmt.Sprintf("copy job part order with JobId %s and part number %d failed because %s", enumerator.jobPartOrderToFill.ID, enumerator.jobPartOrderToFill.PartNum, errorMsg))
+			return fmt.Errorf("add Transfer copy job part order with JobId %s and part number %d failed because %s", enumerator.jobPartOrderToFill.ID, enumerator.jobPartOrderToFill.PartNum, errorMsg)
 		}
 		enumerator.transfers = []common.CopyTransfer{}
 		enumerator.partNumber += 1
@@ -334,7 +334,7 @@ func (enumerator *uploadTaskEnumerator) dispatchFinalPart() error {
 	}
 	jobStarted, errorMsg := copyHandlerUtil{}.sendJobPartOrderToSTE(enumerator.jobPartOrderToFill, common.PartNumber(enumerator.partNumber), true)
 	if !jobStarted {
-		return errors.New(fmt.Sprintf("copy job part order with JobId %s and part number %d failed because %s", enumerator.jobPartOrderToFill.ID, enumerator.jobPartOrderToFill.PartNum, errorMsg))
+		return fmt.Errorf("dispatch final part copy job part order with JobId %s and part number %d failed because %s", enumerator.jobPartOrderToFill.ID, enumerator.jobPartOrderToFill.PartNum, errorMsg)
 	}
 
 	return nil

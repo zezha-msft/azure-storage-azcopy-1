@@ -21,7 +21,6 @@
 package cmd
 
 import (
-	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -75,10 +74,10 @@ func (validator validator) isAzureLocation(givenURL string) (bool, common.Locati
 		return false, common.Unknown
 	}
 
-	u, _ := url.Parse(givenURL)            // No error should get here after isUrl call.
-	if validator.isEndPointStyle(u.Host) { // TODO: jiac Note endpoint style open new stuffs, need go through existing logics.
-		return true, common.Unknown
-	}
+	u, _ := url.Parse(givenURL) // No error should get here after isUrl call.
+	// if validator.isEndPointStyle(u.Host) { // TODO: jiac whether need enpoint style support?
+	// 	return true, common.Unknown
+	// }
 
 	// It's a possble Azure URL, and it's not a endpoint style URL.
 	tokens := strings.Split(u.Host, ".")
@@ -100,6 +99,6 @@ func (validator validator) isAzureLocation(givenURL string) (bool, common.Locati
 }
 
 // isEndPointStyle check URL's host segment, if it's IP style, then it's endpoint style.
-func (validator validator) isEndPointStyle(host string) bool {
-	return net.ParseIP(host) != nil
-}
+// func (validator validator) isEndPointStyle(host string) bool {
+// 	return net.ParseIP(host) != nil
+// }

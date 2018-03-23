@@ -58,7 +58,7 @@ func (localToFile *localToFile) getServiceBaseAddress(u url.URL, p pipeline.Pipe
 		if path[0] == '/' {
 			path = path[1:]
 		}
-		if localToFile.isUserEndpointStyle(u) {
+		if localToFile.isUserEndpointStyle(u) { //TODO: remove,
 			u.Path = path[:strings.Index(path, "/")]
 		} else {
 			u.Path = ""
