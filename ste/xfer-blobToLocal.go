@@ -23,11 +23,9 @@ package ste
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
-
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-azcopy/common"
 	"github.com/Azure/azure-storage-blob-go/2017-07-29/azblob"
@@ -182,9 +180,10 @@ func generateDownloadBlobFunc(jptm IJobPartTransferMgr, transferBlobURL azblob.B
 				return
 			}
 			// step 2: write the body into the memory mapped file directly
-			_, err = io.ReadFull(get.Body(), destinationMMF[startIndex:startIndex+adjustedChunkSize])
-			io.Copy(ioutil.Discard, get.Body())
-			get.Body().Close()
+			body := get.Body(azblob.RetryReaderOptions{})
+			_, err = io.ReadFull(body, destinationMMF[startIndex:startIndex+adjustedChunkSize])
+			//TODO: Not needed because of ReadFull right? io.Copy(ioutil.Discard, get.Body())
+			body.Close()
 			if err != nil {
 				// cancel entire transfer because this chunk has failed
 				if !jptm.WasCanceled() {

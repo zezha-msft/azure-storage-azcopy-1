@@ -22,7 +22,6 @@ package main
 
 import (
 	"github.com/Azure/azure-storage-azcopy/cmd"
-	"github.com/Azure/azure-storage-azcopy/common"
 	//"github.com/Azure/azure-storage-azcopy/ste"
 	"os"
 	//"os/exec"
@@ -31,25 +30,26 @@ import (
 	//"os/exec"
 )
 
-type exitCode common.EnumInt32
+var eexitCode = exitCode(0)
+type exitCode int32
 
-func (exitCode) success() exitCode { return exitCode{Value: 0} }
-func (exitCode) error() exitCode   { return exitCode{Value: -1} }
+func (exitCode) success() exitCode { return exitCode(0) }
+func (exitCode) error() exitCode   { return exitCode(-1) }
 
 func main() {
-	os.Exit(int(mainWithExitCode().Value))
+	os.Exit(int(mainWithExitCode()))
 }
 
 func mainWithExitCode() exitCode {
 	// If insufficient arguments, show usage & terminate
 	if len(os.Args) == 1 {
 		cmd.Execute()
-		return exitCode{}.success()
+		return eexitCode.success()
 	}
 	azcopyAppPathFolder := GetAzCopyAppPath()
-	go ste.MainSTE(300, 500, azcopyAppPathFolder)
+	go ste.MainSTE(100, 150, azcopyAppPathFolder)
 	cmd.Execute()
-	return exitCode{}.success()
+	return eexitCode.success()
 	//
 	//common.Rpc = common.NewHttpClient("http://localhost:1337").Send
 	//switch os.Args[1] {

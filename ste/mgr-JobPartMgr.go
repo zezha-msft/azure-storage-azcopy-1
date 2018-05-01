@@ -33,15 +33,16 @@ type IJobPartMgr interface {
 }
 
 // NewPipeline creates a Pipeline using the specified credentials and options.
-func newPipeline(c azblob.Credential, o azblob.PipelineOptions, r XferRetryOptions, p *pacer) pipeline.Pipeline {
+func newPipeline(c azblob.Credential, o azblob.PipelineOptions, p *pacer) pipeline.Pipeline {
 	if c == nil {
 		panic("c can't be nil")
 	}
+
 	// Closest to API goes first; closest to the wire goes last
 	f := []pipeline.Factory{
 		azblob.NewTelemetryPolicyFactory(o.Telemetry),
 		azblob.NewUniqueRequestIDPolicyFactory(),
-		NewXferRetryPolicyFactory(r),
+		azblob.NewRetryPolicyFactory(o.Retry),
 		c,
 		pipeline.MethodFactoryMarker(), // indicates at what stage in the pipeline the method factory is invoked
 		NewPacerPolicyFactory(p),
@@ -67,10 +68,10 @@ type jobPartMgr struct {
 	fileHTTPHeaders azfile.FileHTTPHeaders
 
 	// Additional data shared by all of this Job Part's transfers; initialized when this jobPartMgr is created
-	blockBlobTier string
+	blockBlobTier common.BlockBlobTier
 
 	// Additional data shared by all of this Job Part's transfers; initialized when this jobPartMgr is created
-	pageBlobTier string
+	pageBlobTier common.PageBlobTier
 
 	blobMetadata azblob.Metadata
 	fileMetadata azfile.Metadata
@@ -115,8 +116,8 @@ func (jpm *jobPartMgr) ScheduleTransfers(jobCtx context.Context) {
 		ContentEncoding: string(dstData.ContentEncoding[:dstData.ContentEncodingLength]),
 	}
 
-	jpm.blockBlobTier = string(dstData.BlockBlobTier[:dstData.BlockBlobTierLength])
-	jpm.pageBlobTier = string(dstData.PageBlobTier[:dstData.PageBlobTierLength])
+	jpm.blockBlobTier = dstData.BlockBlobTier
+	jpm.pageBlobTier = dstData.PageBlobTier
 	jpm.fileHTTPHeaders = azfile.FileHTTPHeaders{
 		ContentType:     string(dstData.ContentType[:dstData.ContentTypeLength]),
 		ContentEncoding: string(dstData.ContentEncoding[:dstData.ContentEncodingLength]),
@@ -193,17 +194,18 @@ func (jpm *jobPartMgr) createPipeline() {
 		case common.EFromTo.BlobLocal(): // download from Azure Blob to local file system
 			fallthrough
 		case common.EFromTo.LocalBlob(): // upload from local file system to Azure blob
-			jpm.pipeline = newPipeline(azblob.NewAnonymousCredential(), azblob.PipelineOptions{
-				Log:       jpm.jobMgr.PipelineLogInfo(),
-				Telemetry: azblob.TelemetryOptions{Value: "azcopy-V2"},
-			},
-				XferRetryOptions{
-					Policy:        0,
+			jpm.pipeline = azblob.NewPipeline(azblob.NewAnonymousCredential(), azblob.PipelineOptions{
+
+				Retry: azblob.RetryOptions{
+					Policy:        azblob.RetryPolicyExponential,
 					MaxTries:      UploadMaxTries,
 					TryTimeout:    UploadTryTimeout,
 					RetryDelay:    UploadRetryDelay,
-					MaxRetryDelay: UploadMaxRetryDelay},
-				jpm.pacer)
+					MaxRetryDelay: UploadMaxRetryDelay,
+				},
+				Log:       jpm.jobMgr.PipelineLogInfo(),
+				Telemetry: azblob.TelemetryOptions{Value: "azcopy-V2"},
+			})
 		case common.EFromTo.FileLocal(): // download from Azure File to local file system
 			fallthrough
 		case common.EFromTo.LocalFile(): // upload from local file system to Azure File
@@ -261,9 +263,7 @@ func (jpm *jobPartMgr) fileDstData(dataFileToXfer common.MMF) (headers azfile.Fi
 }
 
 func (jpm *jobPartMgr) BlobTiers() (blockBlobTier, pageBlobTier azblob.AccessTierType) {
-	blockBlobTier = azblob.AccessTierType(jpm.blockBlobTier)
-	pageBlobTier = azblob.AccessTierType(jpm.pageBlobTier)
-	return
+	return jpm.blockBlobTier.ToAccessTierType(), jpm.pageBlobTier.ToAccessTierType()
 }
 
 func (jpm *jobPartMgr) localDstData() (preserveLastModifiedTime bool) {

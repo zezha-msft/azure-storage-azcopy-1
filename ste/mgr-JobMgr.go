@@ -148,13 +148,13 @@ func (jm *jobMgr) ReportJobPartDone() uint32 {
 	}
 
 	switch part0Plan := jobPart0Mgr.Plan(); part0Plan.JobStatus() {
-	case (common.JobStatus{}).Cancelled():
+	case common.EJobStatus.Cancelled():
 		if shouldLog {
 			jm.Log(pipeline.LogInfo, fmt.Sprintf("all parts of Job %v successfully cancelled; cleaning up the Job", jm.jobID))
 		}
 		//jm.jobsInfo.cleanUpJob(jm.jobID)
-	case (common.JobStatus{}).InProgress():
-		part0Plan.SetJobStatus((common.JobStatus{}).Completed())
+	case common.EJobStatus.InProgress():
+		part0Plan.SetJobStatus((common.EJobStatus).Completed())
 	}
 	return partsDone
 }

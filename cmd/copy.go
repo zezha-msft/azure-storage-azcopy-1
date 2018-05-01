@@ -106,19 +106,14 @@ func (raw rawCopyCmdArgs) cook() (cookedCopyCmdArgs, error) {
 
 	cooked.blockSize = raw.blockSize
 
-	// verify the input blob-tier.
-	// allowed blob-tier are Hot, Cold & Archive
-	blockBlobTier, err := common.BlockBlobTier("").Parse(raw.blockBlobTier)
+	err = cooked.blockBlobTier.Parse(raw.blockBlobTier)
 	if err != nil {
 		return cooked, err
 	}
-
-	pageBlobTier, err := common.PageBlobTier("").Parse(raw.pageBlobTier)
+	err = cooked.pageBlobTier.Parse(raw.pageBlobTier)
 	if err != nil {
 		return cooked, err
 	}
-	cooked.blockBlobTier = blockBlobTier
-	cooked.pageBlobTier = pageBlobTier
 	cooked.metadata = raw.metadata
 	cooked.contentType = raw.contentType
 	cooked.contentEncoding = raw.contentEncoding
@@ -228,7 +223,6 @@ func (cca cookedCopyCmdArgs) processRedirectionDownload(blobUrl string) error {
 	if err != nil {
 		return fmt.Errorf("fatal: cannot download blob to Stdout due to error: %s", err.Error())
 	}
-
 	return nil
 }
 
