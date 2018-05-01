@@ -197,12 +197,12 @@ func (jpm *jobPartMgr) createPipeline() {
 				Log:       jpm.jobMgr.PipelineLogInfo(),
 				Telemetry: azblob.TelemetryOptions{Value: "azcopy-V2"},
 			},
-			XferRetryOptions{
-				Policy:        0,
-				MaxTries:      UploadMaxTries,
-				TryTimeout:    UploadTryTimeout,
-				RetryDelay:    UploadRetryDelay,
-				MaxRetryDelay: UploadMaxRetryDelay},
+				XferRetryOptions{
+					Policy:        0,
+					MaxTries:      UploadMaxTries,
+					TryTimeout:    UploadTryTimeout,
+					RetryDelay:    UploadRetryDelay,
+					MaxRetryDelay: UploadMaxRetryDelay},
 				jpm.pacer)
 		case common.EFromTo.FileLocal(): // download from Azure File to local file system
 			fallthrough
