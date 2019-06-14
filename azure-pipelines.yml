@@ -16,11 +16,8 @@ jobs:
         inputs:
           command: 'build'
           #customCommand: # Required when command == Custom
-          arguments: '-o azcopy_linux'
+          arguments: '-o $(Build.ArtifactStagingDirectory)/azcopy_linux'
           workingDirectory:
-
-      - script: |
-        mv azcopy_linux $(Build.ArtifactStagingDirectory)
 
       - task: PublishBuildArtifacts@1
           displayName: 'Publish Artifacts'
