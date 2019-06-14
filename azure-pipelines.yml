@@ -6,10 +6,11 @@ jobs:
     pool:
       vmImage: 'ubuntu-16.04'
     steps:
-      - task: UseGoVersion@0
-          displayName: 'Use Go 1.12'
-          inputs:
-            versionSpec: '1.12'
+      - task: GoTool@0
+        inputs:
+        version: '1.12'
+        #goPath: # Optional
+        #goBin: # Optional
 
       - task: Go@0
         inputs:
