@@ -12,12 +12,18 @@ jobs:
         #goPath: # Optional
         #goBin: # Optional
 
-      - task: Go@0
-        inputs:
-          command: 'build'
-          #customCommand: # Required when command == Custom
-          arguments: '-o $(Build.ArtifactStagingDirectory)/azcopy_linux'
-          workingDirectory:
+#      - task: Go@0
+#        inputs:
+#          command: 'build'
+#          #customCommand: # Required when command == Custom
+#          arguments: '-o $(Build.ArtifactStagingDirectory)/azcopy_linux'
+#          workingDirectory:
+      - script: |
+          GOARCH=amd64 GOOS=linux go build -o "$(Build.ArtifactStagingDirectory)/azcopy_linux_amd64"
+          GOARCH=amd64 GOOS=linux go build -tags "se_integration" -o "$(Build.ArtifactStagingDirectory)/azcopy_linux_se_amd64"
+          GOARCH=amd64 GOOS=windows go build -o "$(Build.ArtifactStagingDirectory)/azcopy_windows_amd64.exe"
+          GOARCH=386 GOOS=windows go build -o "$(Build.ArtifactStagingDirectory)/azcopy_windows_386.exe"
+        displayName: 'Generate builds'
 
       - task: PublishBuildArtifacts@1
         displayName: 'Publish Artifacts'
