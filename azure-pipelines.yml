@@ -19,6 +19,13 @@ jobs:
           arguments: '-o azcopy_linux'
           workingDirectory:
 
+      - script: |
+        mv azcopy_linux $(Build.ArtifactStagingDirectory)
+
+      - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifacts'
+          condition: succeededOrFailed()
+
 #  - job: MacOS Build
 #    pool:
 #      vmImage: 'xcode9-macos10.13'
