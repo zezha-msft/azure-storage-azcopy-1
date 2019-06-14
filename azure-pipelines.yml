@@ -2,7 +2,7 @@ trigger:
   - master
 
 jobs:
-  - job: Linux_and_Windows_Builds'
+  - job: Linux_and_Windows_Builds
     pool:
       vmImage: 'ubuntu-16.04'
     steps:
