@@ -20,8 +20,8 @@ jobs:
           workingDirectory:
 
       - task: PublishBuildArtifacts@1
-          displayName: 'Publish Artifacts'
-          condition: succeededOrFailed()
+        displayName: 'Publish Artifacts'
+        condition: succeededOrFailed()
 
 #  - job: MacOS Build
 #    pool:
