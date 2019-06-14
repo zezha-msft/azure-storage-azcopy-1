@@ -2,7 +2,7 @@ trigger:
   - master
 
 jobs:
-  - job: 'Linux and Windows Builds'
+  - job: Linux_and_Windows_Builds'
     pool:
       vmImage: 'ubuntu-16.04'
     steps:
@@ -20,7 +20,7 @@ jobs:
         displayName: 'Publish Artifacts'
         condition: succeededOrFailed()
 
-  - job: 'MacOS Build'
+  - job: MacOS_Build
     pool:
       vmImage: 'xcode9-macos10.13'
     steps:
