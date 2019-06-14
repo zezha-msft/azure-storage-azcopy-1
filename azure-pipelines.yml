@@ -8,7 +8,7 @@ jobs:
     steps:
       - task: GoTool@0
         inputs:
-        version: '1.12'
+          version: '1.12'
         #goPath: # Optional
         #goBin: # Optional
 
