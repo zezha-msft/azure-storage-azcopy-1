@@ -23,17 +23,21 @@ Reasons:
     - Creating a new command makes it easier to document and distinguish it from a regular copy. 
 - The `new` flag is renamed slightly for clarify. By default, it should be true.
     - In other words, a new "job" is created by default; the user can choose to continue a previous session by specifying `--new-session=false`.
+    - This is not consistent with how the `resume` command works in AzCopy, but since the job tracking is done differently in CLFSLoad, we may be forced to keep it this way.
 
 ### Implementation
 1. Package CLFSLoad as an executable:
-    - In order to provide a great user experience, we need to package CLFSLoad into an executable using tools such as .
-        - The current distribution method of asking the user to install Python3, create a virtual environment, and running the setup.py works great when CLFSLoad is a standalone project, but it would create too much friction is it were to be embedded in AzCopy. As such, we must be able to distribute CLFSLoad more easily so that there's no installation step before invoking `azcopy load`.
-        - AzCopy must know the hash of the CLFSLoad executable, this way we can verify it and make sure we are invoking the right tool, since we are passing around the SAS.
+    - In order to provide a great user experience, we need to package CLFSLoad into an executable using tools such as [PyInstaller](https://www.pyinstaller.org).
+        - The current distribution method of asking the user to install Python3, create a virtual environment, and running the setup.py works great when CLFSLoad is a standalone project, but it would create too much friction if it was to be embedded in AzCopy. As such, we must be able to distribute CLFSLoad more easily so that there's no installation step before invoking `azcopy load`.
+        - AzCopy must remember the hash of the CLFSLoad executable that it shipped with. This way we can verify it and make sure we are invoking the right tool, since we are passing around a form of credential (the SAS).
 2. Translate the arguments and flags:
     - This is the easy part.
 3. Invoke CLFSLoad
-    - Should be very straightforward. Ex: `exec.Command("script.py").Run()`
+    - Verify hash first.
+    - The rest should be very straightforward. Ex: `exec.Command("CLFSLoad.py").Run()`
+    - Connect the stdout of CLFSLoad so that the same output is shown to the user. 
+        - If time permits, we can format the output of CLFSLoad to be similar to the other AzCopy commands.
 
-### Other improvements:
+### Other improvements for CLFSLoad:
 1.	azure-storage==0.36.0 has been deprecated for quite a while, CLFSLoad should upgrade to azure-storage-blob==2.1.0
-2.	azure-mgmt-storage is present in requirements.txt, but it doesn't appear to be used (please correct if wrong). `requirements.txt` should be perhaps be scrubbed to make sure only the essential dependencies are packaged.
+2.	azure-mgmt-storage is present in requirements.txt, but it doesn't appear to be used (please correct if wrong). `requirements.txt` should perhaps be scrubbed to make sure only the essential dependencies are packaged/shipped.
